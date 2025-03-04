@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "parts/header.html" %}
+<h2>Sign Up</h2>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col col-6">
+
+        </div>
+        <div class="col col-6">
+<!-- Step Navigation -->
+<div class="step-indicator">
+    <span id="step1-indicator" class="active">1. Account Info</span>
+    <span id="step2-indicator">2. Select Plan</span>
+    <span id="step3-indicator">3. Payment</span>
+</div>
+
+<!-- Multi-Step Form -->
+<form id="signup-form">
+    
+    <!-- Step 1: User Information -->
+    <div id="step1" class="flex-column d-flex">
+        <label>Username:</label>
+        <input type="text" id="username" required>
+        
+        <label>Email:</label>
+        <input type="email" id="email" required>
+        
+        <label>Password:</label>
+        <input type="password" id="password1" required>
+
+        <label>Confirm Password:</label>
+        <input type="password" id="password2" required>
+
+        <label>Company Name:</label>
+        <input type="text" id="company_name">
+        
+        <label>Website:</label>
+        <input type="url" id="website">
+
+        <label>Phone Number:</label>
+        <input type="text" id="phone_number">
+
+        <button type="button" onclick="nextStep(2)">Next</button>
+    </div>
+
+    <!-- Step 2: Plan Selection -->
+    <div id="step2" style="display: none;" class="flex-column">
+        <h3>Select a Subscription Plan</h3>
+        <select id="subscription_plan">
+            {% for plan in subscription_plan %}
+            <option value="{{ plan.stripe_price_id }}">{{ plan.name }} - ${{ plan.price_per_month }}/mo</option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="prevStep(1)">Back</button>
+        <button type="button" onclick="nextStep(3)">Next</button>
+    </div>
+
+    <!-- Step 3: Payment -->
+    <div id="step3" style="display: none;" class="flex-column">
+        <h3>Enter Payment Details</h3>
+        <div id="card-element"></div>
+
+        <button type="button" onclick="prevStep(2)">Back</button>
+        <button type="submit" id="submit-button">Pay</button>
+        <div id="payment-message"></div>
+    </div>
+</form>
+</div>
+</div>
+</div>
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    let stripe = Stripe("pk_test_bUFWuMKQ47H0eUW7IfagOcXa");
+    let elements = stripe.elements();
+    let card = elements.create("card");
+    card.mount("#card-element");
+
+    let currentStep = 1;
+    function nextStep(step) {
+        document.getElementById(`step${currentStep}`).style.setProperty("display","none","important")
+        document.getElementById(`step${step}`).style.setProperty("display","flex","important")
+        document.getElementById(`step${currentStep}-indicator`).classList.remove("active");
+        document.getElementById(`step${step}-indicator`).classList.add("active");
+        currentStep = step;
+    }
+
+    function prevStep(step) {
+        nextStep(step);
+    }
+
+    document.getElementById("signup-form").addEventListener("submit", async function(event) {
+        event.preventDefault();
+
+        let userData = {
+            username: document.getElementById("username").value,
+            email: document.getElementById("email").value,
+            password1: document.getElementById("password1").value,
+            password2: document.getElementById("password2").value,
+            company_name: document.getElementById("company_name").value,
+            website: document.getElementById("website").value,
+            phone_number: document.getElementById("phone_number").value,
+            subscription_plan: document.getElementById("subscription_plan").value
+        };
+
+        let response = await fetch("{% url 'create_user' %}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": "{{ csrf_token }}" },
+            body: JSON.stringify(userData)
+        });
+
+        let data = await response.json();
+
+        if (data.error) {
+            document.getElementById("payment-message").innerText = data.error;
+            return;
+        }
+
+        let { paymentIntent, error } = await stripe.confirmCardPayment(data.clientSecret, {
+            payment_method: { card: card }
+        });
+
+        if (error) {
+            document.getElementById("payment-message").innerText = error.message;
+        } else {
+            window.location.href = "{% url 'stripe_success' %}";
+        }
+    });
+</script>
+
+<style>
+    .step-indicator span {
+        margin-right: 15px;
+        font-weight: bold;
+        color: gray;
+    }
+    .step-indicator .active {
+        color: black;
+    }
+</style>
+
+{% endblock %}
